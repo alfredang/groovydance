@@ -1,5 +1,3 @@
-import { GoogleGenAI, Type, SchemaType } from "@google/genai";
-
 // --- Utility: File to Base64 ---
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -16,172 +14,79 @@ export const fileToBase64 = (file: File): Promise<string> => {
 };
 
 // --- API Key Management ---
-// Simplified for free tier testing
 export const checkApiKey = async (): Promise<boolean> => true;
 export const promptApiKey = async (): Promise<void> => {};
 
-const getAIClient = (): GoogleGenAI => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+// --- API Helper ---
+const callGeminiAPI = async (action: string, payload: any): Promise<any> => {
+  const response = await fetch('/api/gemini', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action, payload }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'API request failed');
+  }
+
+  const data = await response.json();
+  return data.result;
 };
 
 // --- Features ---
 
 // 1. Dance Generator (Downgraded to Image Generation for Free Tier Testing)
-// Veo is not available on free tier, so we generate a keyframe of the dance instead.
 export const generateDanceVideo = async (
   imageBase64: string,
   imageMimeType: string,
   prompt: string
 ): Promise<string> => {
-  const ai = getAIClient();
-  
-  // Using gemini-2.5-flash-image to simulate the dance result as a static image
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            data: imageBase64,
-            mimeType: imageMimeType,
-          },
-        },
-        { text: `Generate a cinematic full-body shot of this person performing this dance move: ${prompt}. Keep the character consistent.` },
-      ],
-    },
+  return callGeminiAPI('generateDanceVideo', {
+    imageBase64,
+    imageMimeType,
+    prompt,
   });
-
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData) {
-      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-    }
-  }
-  throw new Error("Video/Image generation failed.");
 };
 
-// 2. Image Generation (Downgraded to Gemini 2.5 Flash Image)
+// 2. Image Generation
 export const generateHighQualityImage = async (
   prompt: string,
   size: '1K' | '2K' | '4K' = '1K'
 ): Promise<string> => {
-  const ai = getAIClient();
-  
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [{ text: prompt }]
-    }
-    // Note: aspect ratio/size config is limited in Flash Image compared to Pro
-  });
-
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData) {
-      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-    }
-  }
-  throw new Error("No image generated.");
+  return callGeminiAPI('generateImage', { prompt, size });
 };
 
-// 3. Image Editing (Gemini 2.5 Flash Image)
+// 3. Image Editing
 export const editImage = async (
   imageBase64: string,
   mimeType: string,
   prompt: string
 ): Promise<string> => {
-  const ai = getAIClient();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            data: imageBase64,
-            mimeType: mimeType,
-          },
-        },
-        { text: prompt },
-      ],
-    },
-  });
-
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-  }
-  
-  if (response.text) {
-      throw new Error(`Model returned text instead of image: ${response.text}`);
-  }
-  
-  throw new Error("Image editing failed.");
+  return callGeminiAPI('editImage', { imageBase64, mimeType, prompt });
 };
 
-// 4. Analysis (Downgraded to Gemini 3 Flash for Free Tier)
+// 4. Analysis
 export const analyzeContent = async (
   fileBase64: string,
   mimeType: string,
   prompt: string,
   isVideo: boolean = false
 ): Promise<string> => {
-  const ai = getAIClient();
-  const model = 'gemini-3-flash-preview'; 
-
-  const response = await ai.models.generateContent({
-    model,
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            data: fileBase64,
-            mimeType: mimeType,
-          },
-        },
-        { text: prompt },
-      ],
-    },
-  });
-
-  return response.text || "No analysis returned.";
+  return callGeminiAPI('analyzeContent', { fileBase64, mimeType, prompt, isVideo });
 };
 
-// 5. Assistant with Search Grounding (Uses Flash, generally compatible)
+// 5. Assistant with Search Grounding
 export const chatWithSearch = async (
   history: { role: 'user' | 'model'; text: string }[],
   newMessage: string
 ): Promise<{ text: string; groundingUrls: string[] }> => {
-  const ai = getAIClient();
-  const model = 'gemini-3-flash-preview'; 
-
-  const chat = ai.chats.create({
-    model,
-    history: history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
-    config: {
-      tools: [{ googleSearch: {} }],
-    },
-  });
-
-  const response = await chat.sendMessage({ message: newMessage });
-  
-  const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-  const urls: string[] = [];
-
-  groundingChunks.forEach((chunk: any) => {
-    if (chunk.web?.uri) urls.push(chunk.web.uri);
-  });
-
-  return {
-    text: response.text || "I couldn't generate a response.",
-    groundingUrls: urls
-  };
+  return callGeminiAPI('chatWithSearch', { history, newMessage });
 };
 
-// 6. Fast Text Gen (Flash Lite)
+// 6. Fast Text Gen
 export const generateFastText = async (prompt: string): Promise<string> => {
-    const ai = getAIClient();
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-lite-latest',
-        contents: prompt
-    });
-    return response.text || "";
-}
+  return callGeminiAPI('generateFastText', { prompt });
+};
