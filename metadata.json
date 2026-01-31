@@ -1,0 +1,8 @@
+{
+  "name": "GrooveGen AI Studio",
+  "description": "An all-in-one creative suite powered by Google Gemini. Create dance videos from photos, edit images with natural language, generate high-fidelity art, and analyze multimedia content.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
