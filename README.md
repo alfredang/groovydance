@@ -11,6 +11,8 @@
 
 An AI-powered creative studio that transforms photos into dance animations, generates and edits images, analyzes media content, and provides an intelligent assistant - all powered by Google's Gemini AI.
 
+**[Live Demo](https://groovydance-app.netlify.app)**
+
 ## Features
 
 ### Dance Generator
